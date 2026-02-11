@@ -223,6 +223,11 @@ Sequenced haplotypes phased with a phasing software (left). LAI is used to label
 ## Calibration
 To ensure that Gnomix outputs probability estimates that reflect it's true confidence and accuracy, we recommend using calibration. We use Isotonic Regression to map the predicted probabilities to calibrated probabilities where the latter are more likely to have predictions with a confidence of X% correct matching their actual X% frequency of being correct in practice.
 
+## Best Practices
+
+For recommended workflows and common tuning options, see **[Best Practices](./gnomix-best-practices.md)**. It covers input preparation tips (build consistency, liftover, and imputation) and guidance for adjusting key hyperparameters via the config file.
+
+
 ## License
 
 **NOTICE**: This software is available free of charge for academic research use only. Commercial users and for profit companies or consultants can use the features present in this software by contacting [Galatea Bio](https://www.galatea.bio/), to which [Stanford Office of Technology Licensing](https://otl.stanford.edu/) has exclusively licensed technology used in this package. Academic users may fork this repository and modify and improve to suit their research needs, but also inherit these terms and must include a licensing notice to this effect.
