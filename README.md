@@ -13,7 +13,7 @@ Gnomix can be used in two ways:
 - training a model from scratch using reference training data or 
 - loading a pre-trained Gnomix model (see **Pre-Trained Models** below)
 
-In both cases the models are used to infer local ancestry on provided query data that has already been phased (using a program like beagle, shapeit, or eagle) and pre-processed to have the same sites as the reference training samples on the same strand, or if a pre-trained model is used instead see **Pre-Trained Models** below for requirements. The most important preprocessing and QC steps are careful variant harmonization between reference and query data, retention of high-quality biallelic SNPs, and phasing before inference.
+In both cases the models are used to infer local ancestry on provided query data that has already been phased (using a program like beagle, shapeit, or eagle) and pre-processed to have the same sites as the reference training samples on the same strand, or if a pre-trained model is used instead see **Pre-Trained Models** below for requirements.
 
 ## Installation and Dependencies
 
@@ -225,7 +225,7 @@ To ensure that Gnomix outputs probability estimates that reflect it's true confi
 
 ## Best Practices
 
-For recommended workflows and common tuning options, see **[Best Practices](./gnomix-best-practices.md)**. It covers input preparation tips (build consistency, liftover, and imputation) and guidance for adjusting key hyperparameters via the config file. In general, we do not recommend LD pruning of the reference panel, since Gnomix is designed to leverage local haplotype structure and correlation patterns across nearby SNPs. We would favor using as many high-quality harmonized SNPs as practical.
+For recommended workflows and common tuning options, see **[Best Practices](./gnomix-best-practices.md)**. It covers input preparation tips (build consistency, liftover, and imputation) and guidance for adjusting key hyperparameters via the config file. We recommend using **MAF of .01, no LD pruning, phased, and only biallelic snps**.
 
 
 ## License
