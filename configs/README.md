@@ -1,18 +1,22 @@
 # Configuration file templates
 
-In this folder we provide different configuration file templates corresponding to edge use cases. Some are critical for execution, while others are mainly intended to improve results. If you find yourself tweaking a config file for a particular use case, consider sharing it (for example, by creating an issue) so other researchers can benefit from it too :)
+In this folder we provide different configuration file templates corresponding to different use cases. Some are critical for execution, while others are mainly intended to improve results. If you find yourself tweaking a config file for a particular use case, consider sharing it (for example, by creating an issue) so other researchers can benefit from it too :)
 
 ## config.yaml
 
-This is the default configuration for all LAI analyses on the human genome, and it is the same as the one in the root folder. It is designed for whole-genome data, but it also works well with array data.
+This is the default, compromise configuration for all LAI analyses on the human genome, and it is the same as the one in the root folder. It is designed for generic whole-genome data, but it also works well with array data.
 
 ## config_array.yaml
 
-This is a slight improvement for array data on the human genome. For array data, variations of the string kernels tend to perform significantly better than the default logistic regression model. Since array data is also smaller, using more complex models is not only useful for performance, but also typically has lower time and memory requirements.
+This is an optimization for array data on the human genome. For array data, variations of the string kernels tend to perform significantly better than the default logistic regression model. Since array data file sizes are also smaller, using more complex models is not only useful for performance for array, since they have fewer snp features, but also typically has less time and memory downside, as opposed to whole genome, for the same reason.
 
 The only difference is the base models that are used:
 
 - *model.inference = best*
+
+## config_tracts.yaml
+
+This config is intended to prioritize tract length accuracy for population analyses, especially when results will be used with Tracts and similar downstream tools. In these settings, ancestry segment length is important, since the length distribution will be used, so allowing rapid switching of local ancestry predictions to maximize site-specific ancestry accuracy in the face of uncertainty between two ancestries, is undesired. Instead, a best choice selection for the entire tract is desired, so that its length is not split into many small fragments. Use this template when your objective is maximizing tract-level accuracy for downstream population demographic analyses, rather than maximizing site-specific ancestry accuracy.
 
 ## config_lowdata.yaml
 
@@ -32,9 +36,3 @@ This config has been used for analyzing date palm data. It extends the *lowdata*
 
 - *window_size_cM = 0.05* (smaller)
 - *smooth_size = 25* (smaller)
-
-## config_tracts.yaml
-
-This config is intended to provide smoother predictions for population analysis, especially when results will be used with tracts and similar downstream tools. In these settings, smoother ancestry segments are often preferable to noisier, rapidly switching local predictions, since tract-based methods typically benefit from more continuous ancestry assignments.
-
-Use this template when your priority is obtaining cleaner tract-level patterns for downstream population analysis rather than maximizing very local switching sensitivity.
