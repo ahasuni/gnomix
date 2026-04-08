@@ -1,26 +1,40 @@
 # Configuration file templates
 
-In this folder we have different conifiguration file tempaates corresponding to edge use cases. Some are critical for exectution, others only to ensure better results. If you find yourself tweeking a config file for your own special use case, consider sharing it (e.g. by creating an issue) so others researchers can also use it :)
+In this folder we provide different configuration file templates corresponding to edge use cases. Some are critical for execution, while others are mainly intended to improve results. If you find yourself tweaking a config file for a particular use case, consider sharing it (for example, by creating an issue) so other researchers can benefit from it too :)
 
 ## config.yaml
 
-This is the default for all LAI on human genome and the same as the one we have in the root folder. It's designed for whole genome data but will work well with array data too.
+This is the default configuration for all LAI analyses on the human genome, and it is the same as the one in the root folder. It is designed for whole-genome data, but it also works well with array data.
 
 ## config_array.yaml
 
-This is a slight improvement when using array data for the human genome. For array data, variations of the string kernels tend to be significantly superior to the default logistic regression model. Since array data is also smaller, the use of more complex models is not only very useful for performance also has less time and memory requirements. The only difference is the base models that are used: *model.inference=best*
+This is a slight improvement for array data on the human genome. For array data, variations of the string kernels tend to perform significantly better than the default logistic regression model. Since array data is also smaller, using more complex models is not only useful for performance, but also typically has lower time and memory requirements.
+
+The only difference is the base models that are used:
+
+- *model.inference = best*
 
 ## config_lowdata.yaml
 
-When training with small samples size, e.g. less than 20 samples or less then 5 samples per population, one can barely afford data for validation. That's why we recommend having none: *simulation.split.ratios.val = 0*. Given the small data size, we also recommend using the best models independently from the data type, *model.inference=best*. If compuation time is to high, the default (empty) is better.
+When training with a small sample size, for example fewer than 20 samples or fewer than 5 samples per population, one can barely afford to hold out data for validation. That is why we recommend not using a validation split in this setting:
+
+- *simulation.split.ratios.val = 0*
+
+Given the small data size, we also recommend using the best models independently from the data type:
+
+- *model.inference = best*
+
+If computation time is too high, the default (empty) setting is better.
 
 ## config_plants.yaml
 
-This config has been used for analyzing date palm data. It's an extension of the *lowdata* config file with the additional change in the window size. Since that specific data had much higher density of snps per centiMorgan we reduce the window size of the model:
+This config has been used for analyzing date palm data. It extends the *lowdata* config file with an additional change in the window size. Since that specific dataset had a much higher density of SNPs per centiMorgan, we reduce the model window size:
 
 - *window_size_cM = 0.05* (smaller)
-
 - *smooth_size = 25* (smaller)
 
-## Coming soon: templatets for dogs
+## config_tracts.yaml
 
+This config is intended to provide smoother predictions for population analysis, especially when results will be used with tracts and similar downstream tools. In these settings, smoother ancestry segments are often preferable to noisier, rapidly switching local predictions, since tract-based methods typically benefit from more continuous ancestry assignments.
+
+Use this template when your priority is obtaining cleaner tract-level patterns for downstream population analysis rather than maximizing very local switching sensitivity.
