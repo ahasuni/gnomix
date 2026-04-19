@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from collections import namedtuple
 import scipy.interpolate
+import json
 
 from src.utils import read_vcf, read_genetic_map
 
@@ -114,6 +115,66 @@ def build_founders(sample_map_data,gt_data,chm_length_snps):
     
     return founders
 
+def build_founders_from_haplotype_matrix(haplotypes, ancestry_codes, founder_names=None):
+    """
+    Build founders from a haplotype matrix.
+
+    Parameters
+    ----------
+    haplotypes : np.ndarray
+        Shape (n_haps, n_snps), values expected in {0,1}.
+    ancestry_codes : np.ndarray
+        Shape (n_haps,), ancestry code for each haplotype.
+        For now, the two haplotypes making one founder should have the same ancestry.
+    founder_names : list[str] or None
+        Optional names for diploid founders. Length should be n_haps // 2.
+
+    Returns
+    -------
+    founders : list[Person]
+    """
+    haplotypes = np.asarray(haplotypes, dtype=np.uint8)
+    ancestry_codes = np.asarray(ancestry_codes, dtype=np.uint8)
+
+    if haplotypes.ndim != 2:
+        raise ValueError(f"haplotypes must have shape (n_haps, n_snps), got {haplotypes.shape}")
+
+    n_haps, n_snps = haplotypes.shape
+
+    if n_haps % 2 != 0:
+        raise ValueError("Need an even number of haplotypes to build diploid founders.")
+
+    if len(ancestry_codes) != n_haps:
+        raise ValueError("ancestry_codes length must equal number of haplotypes.")
+
+    n_founders = n_haps // 2
+    if founder_names is None:
+        founder_names = [f"synthetic_founder_{i}" for i in range(n_founders)]
+
+    founders = []
+    for i in range(n_founders):
+        h1 = haplotypes[2 * i]
+        h2 = haplotypes[2 * i + 1]
+        a1 = ancestry_codes[2 * i]
+        a2 = ancestry_codes[2 * i + 1]
+
+        if a1 != a2:
+            raise ValueError(
+                f"Haplotype pair {2*i},{2*i+1} has mismatched ancestry codes: {a1} vs {a2}"
+            )
+
+        maternal = {
+            "snps": h1.astype(np.uint8),
+            "anc": np.array([a1] * n_snps).astype(np.uint8),
+        }
+        paternal = {
+            "snps": h2.astype(np.uint8),
+            "anc": np.array([a2] * n_snps).astype(np.uint8),
+        }
+
+        founders.append(Person(maternal, paternal, founder_names[i]))
+
+    return founders
 
 
 def admix(founders,founders_weight,gen,breakpoint_probability,chm_length_snps,chm_length_morgans):
@@ -204,21 +265,25 @@ def write_output(root,dataset):
 class LAIDataset:
     
     
-    def __init__(self,chm,reference,genetic_map,seed=94305):
+    def __init__(self, chm, reference, genetic_map, seed=94305, load_call_data=True):
 
         np.random.seed(seed)
 
         self.chm = chm
-        
-        # vcf data
+        self.reference = reference
+        self.genetic_map = genetic_map
+        self.seed = seed
+
+        # vcf scaffold data
         print("Reading vcf file...")
-        vcf_data = read_vcf(reference,self.chm)
+        vcf_data = read_vcf(reference, self.chm)
         self.pos_snps = vcf_data["variants/POS"].copy()
         self.num_snps = vcf_data["calldata/GT"].shape[0]
         self.ref_snps = vcf_data["variants/REF"].copy().astype(str)
         self.alt_snps = vcf_data["variants/ALT"][:,0].copy().astype(str)
-        
-        self.call_data = vcf_data["calldata/GT"]
+
+        # optionally keep real founder genotypes
+        self.call_data = vcf_data["calldata/GT"] if load_call_data else None
         self.vcf_samples = vcf_data["samples"]
 
         # genetic map data
@@ -229,11 +294,16 @@ class LAIDataset:
     def buildDataset(self, sample_map, sample_weights=None):
         
         """
-        reads in the above files and extacts info
+        reads in the above files and extracts info
         
-        self: chm, num_snps, morgans, breakpoint_prob, splits, pop_to_num, num_to_pop
-        sample_map_data => sample name, population, population code, (maternal, paternal, name), weight, split
+        self: chm, num_snps, morgans, splits, pop_to_num, num_to_pop
+        sample_map_data => sample name, population, population code, founders, weight, split
         """
+        if self.call_data is None:
+            raise ValueError(
+                "This LAIDataset instance was initialized without reference call_data. "
+                "Use loadSyntheticFounders(...) instead of buildDataset(...)."
+            )
         
         # sample map data
         print("Getting sample map info...")
@@ -252,9 +322,103 @@ class LAIDataset:
         
         # self.founders
         print("Building founders...")
-        self.sample_map_data["founders"] = build_founders(self.sample_map_data,self.call_data,self.num_snps)
+        self.sample_map_data["founders"] = build_founders(self.sample_map_data, self.call_data, self.num_snps)
         self.sample_map_data.drop(['index_in_reference'], axis=1, inplace=True)
-        
+
+def loadSyntheticFounders(self, founder_prefixes, sample_weights=None):"""
+        Load synthetic founder panels produced by build_synthetic_founders.py.
+
+        Parameters
+        ----------
+        founder_prefixes : list[str]
+            Prefixes for contributor outputs. For each prefix P, expects:
+              - P + ".npz"
+              - P + ".json"
+        sample_weights : dict or None
+            Optional mapping from ancestry_label -> weight per founder.
+            If None, weights are uniform across all founders.
+
+        Behavior
+        --------
+        - Reads haplotypes from each contributor panel
+        - Checks SNP count against current scaffold
+        - Builds Person founders by pairing consecutive haplotypes
+        - Creates self.sample_map_data in the same shape expected by create_splits()/simulate()
+        """
+        if isinstance(founder_prefixes, str):
+            founder_prefixes = [founder_prefixes]
+
+        all_rows = []
+        pop_to_num = {}
+        next_pop_code = 0
+
+        for prefix in founder_prefixes:
+            npz_path = prefix + ".npz"
+            json_path = prefix + ".json"
+
+            if not os.path.exists(npz_path):
+                raise FileNotFoundError(f"Missing synthetic founder file: {npz_path}")
+            if not os.path.exists(json_path):
+                raise FileNotFoundError(f"Missing synthetic founder metadata: {json_path}")
+
+            arr = np.load(npz_path)
+            if "haplotypes" not in arr:
+                raise ValueError(f"{npz_path} does not contain 'haplotypes'")
+
+            haplotypes = arr["haplotypes"].astype(np.uint8)
+
+            with open(json_path, "r") as f:
+                meta = json.load(f)
+
+            ancestry_label = meta["ancestry_label"]
+            n_snps = int(meta["n_snps"])
+
+            if n_snps != self.num_snps:
+                raise ValueError(
+                    f"SNP count mismatch for {prefix}: synthetic panel has {n_snps}, "
+                    f"but scaffold has {self.num_snps}"
+                )
+
+            if ancestry_label not in pop_to_num:
+                pop_to_num[ancestry_label] = next_pop_code
+                next_pop_code += 1
+
+            pop_code = pop_to_num[ancestry_label]
+
+            n_haps = haplotypes.shape[0]
+            if n_haps % 2 != 0:
+                raise ValueError(f"{prefix} has odd number of haplotypes ({n_haps}); need pairs.")
+
+            ancestry_codes = np.array([pop_code] * n_haps, dtype=np.uint8)
+            n_founders = n_haps // 2
+            founder_names = [f"{ancestry_label}_synthetic_{i}" for i in range(n_founders)]
+
+            founders = build_founders_from_haplotype_matrix(
+                haplotypes=haplotypes,
+                ancestry_codes=ancestry_codes,
+                founder_names=founder_names,
+            )
+
+            for i, founder in enumerate(founders):
+                row = {
+                    "sample": founder_names[i],
+                    "population": ancestry_label,
+                    "population_code": pop_code,
+                    "founders": founder,
+                }
+                all_rows.append(row)
+
+        self.pop_to_num = pop_to_num
+        self.num_to_pop = {v: k for k, v in self.pop_to_num.items()}
+
+        self.sample_map_data = pd.DataFrame(all_rows)
+
+        if sample_weights is not None:
+            # sample_weights expected to map ancestry label -> per-founder weight
+            self.sample_map_data["sample_weight"] = self.sample_map_data["population"].map(sample_weights).astype(float)
+        else:
+            self.sample_map_data["sample_weight"] = [1.0 / len(self.sample_map_data)] * len(self.sample_map_data)
+            
     def __len__(self):
         return len(self.sample_map_data)
     
