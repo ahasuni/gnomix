@@ -2,6 +2,10 @@ verbose: True
 seed: 94305  #random seed
 
 simulation:
+  founder_mode: vcf
+  synthetic_founder_prefixes: null
+
+simulation:
   run: True # whether or not to run simulation (can be skipped if previously done)
   path: # where to store the simulated data, default is <output_folder>/generated_data/ if run is False this is where the simulation data will be sought
   splits:
