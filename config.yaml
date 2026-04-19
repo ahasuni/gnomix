@@ -2,8 +2,11 @@ verbose: True
 seed: 94305  #random seed
 
 simulation:
-  founder_mode: vcf
-  synthetic_founder_prefixes: null
+  founder_mode: synthetic
+  synthetic_founder_prefixes:
+    - /Users/halkhairo/Desktop/gnomix/synthetic/synthetic_datasets/eur_chr19_synthetic
+    - /Users/halkhairo/Desktop/gnomix/synthetic/synthetic_datasets/afr_chr19_synthetic
+    - /Users/halkhairo/Desktop/gnomix/synthetic/synthetic_datasets/nat_chr19_synthetic
 
 simulation:
   run: True # whether or not to run simulation (can be skipped if previously done)
