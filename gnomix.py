@@ -241,54 +241,86 @@ def train_model(config, data_path, verbose):
             run_shell_cmd(remove_data_cmd, verbose=False)
 
     return model
-    
-def simulate_splits(base_args,config,data_path):
+
+def simulate_splits(base_args, config, data_path):
 
     # build LAIDataset object
     chm = base_args["chm"]
     reference = base_args["reference_file"]
     genetic_map = base_args["genetic_map_file"]
     sample_map = base_args["sample_map_file"]
+
+
     outdir = base_args["output_basename"]
 
-    laidataset = LAIDataset(chm, reference, genetic_map, seed=config["seed"])
-    laidataset.buildDataset(sample_map)
+    founder_mode = config["simulation"].get("founder_mode", "vcf")
+
+    # In synthetic mode we do not need real reference call_data for founders,
+    # but we still want the scaffold metadata from the reference VCF.
+    load_call_data = False if founder_mode == "synthetic" else True
+
+    laidataset = LAIDataset(
+        chm,
+        reference,
+        genetic_map,
+        seed=config["seed"],
+        load_call_data=load_call_data,
+    )
+
+    if founder_mode == "vcf":
+        laidataset.buildDataset(sample_map)
+
+    elif founder_mode == "synthetic":
+        founder_prefixes = config["simulation"].get("synthetic_founder_prefixes")
+        if founder_prefixes is None or len(founder_prefixes) == 0:
+            raise ValueError(
+                "simulation.founder_mode is 'synthetic' but "
+                "simulation.synthetic_founder_prefixes is empty."
+            )
+        laidataset.loadSyntheticFounders(founder_prefixes)
+
+    else:
+        raise ValueError(
+            f"Unknown simulation.founder_mode: {founder_mode}. "
+            "Expected 'vcf' or 'synthetic'."
+        )
 
     # create output directories
     if not os.path.exists(outdir):
         os.makedirs(outdir)
-    
+
     if not os.path.exists(data_path):
         os.makedirs(data_path)
 
-    sample_map_path = os.path.join(data_path,"sample_maps")
+    sample_map_path = os.path.join(data_path, "sample_maps")
     if not os.path.exists(sample_map_path):
         os.makedirs(sample_map_path)
 
-    # split sample map and write it.
+    # split sample map and write it
     splits = config["simulation"]["splits"]["ratios"]
     if len(laidataset) <= 25:
         if splits.get("val"):
             print("WARNING: Too few samples to run validation.")
             del config["simulation"]["splits"]["ratios"]["val"]
-    laidataset.create_splits(splits,sample_map_path)
 
-    # TODO
-    # write metadata into data_path/metadata.yaml
-    # check lines 94 to 96 where this is read...
-    save_dict(laidataset.metadata(), os.path.join(data_path,"metadata.pkl"))
+    laidataset.create_splits(splits, sample_map_path)
+
+    # write metadata
+    save_dict(laidataset.metadata(), os.path.join(data_path, "metadata.pkl"))
+
     # Save genetic map df and store it inside model later after training
     gen_map_df = read_genetic_map(genetic_map, chm)
-    save_dict(gen_map_df, os.path.join(data_path,"gen_map_df.pkl"))
+    save_dict(gen_map_df, os.path.join(data_path, "gen_map_df.pkl"))
 
     # get num_outs
     split_generations = config["simulation"]["splits"]["gens"]
     r_admixed = config["simulation"]["r_admixed"]
     num_outs = {}
-    min_splits = {"train1":800,"train2":150,"val":50}
+    min_splits = {"train1": 800, "train2": 150, "val": 50}
+
     for split in splits:
-        total_sim = max(len(laidataset.return_split(split))*r_admixed, min_splits[split])
-        num_outs[split] = int(total_sim/len(split_generations[split]))
+        total_sim = max(len(laidataset.return_split(split)) * r_admixed, min_splits[split])
+        num_outs[split] = int(total_sim / len(split_generations[split]))
 
     if verbose:
         print("Running Simulation...")
@@ -297,11 +329,13 @@ def simulate_splits(base_args,config,data_path):
         if not os.path.exists(split_path):
             os.makedirs(split_path)
         for gen in split_generations[split]:
-            laidataset.simulate(num_outs[split],
-                                split=split,
-                                gen=gen,
-                                outdir=os.path.join(split_path,"gen_"+str(gen)),
-                                return_out=False)
+            laidataset.simulate(
+                num_outs[split],
+                split=split,
+                gen=gen,
+                outdir=os.path.join(split_path, "gen_" + str(gen)),
+                return_out=False,
+            )
 
     return
 
@@ -347,10 +381,11 @@ if __name__ == "__main__":
     base_args["config_file"] = "./config.yaml"
     if mode == "train":
         base_args["genetic_map_file"] = sys.argv[5]
-        base_args["reference_file"]  = sys.argv[6]
-        base_args["sample_map_file"] = sys.argv[7]
+        base_args["reference_file"] = sys.argv[6]
+        base_args["sample_map_file"] = sys.argv[7] if sys.argv[7].strip() != "None" else None
         if len(sys.argv) == 9:
             base_args["config_file"] = sys.argv[8]
+
     elif mode == "pre-trained":
         base_args["path_to_model"] = sys.argv[5]
 
